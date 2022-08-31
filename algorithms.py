@@ -70,7 +70,7 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
 
     results = SimpleNamespace()
 
-    loss_func = torch.nn.BCELoss(reduction)
+    loss_func = torch.nn.BCELoss()
 
     p_losses = []
     f_losses = []
