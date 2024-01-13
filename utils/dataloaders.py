@@ -47,7 +47,7 @@ class IncomeDataset():
 
         # Age
         if include_age:
-            ca_features['AGEP'] = (df["AGEP"] > 30).astype(int)
+            ca_features['AGEP'] = (ca_features["AGEP"] > 30).astype(int)
 
         # Race
         if include_race:
