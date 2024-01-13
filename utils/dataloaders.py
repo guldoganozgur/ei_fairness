@@ -10,23 +10,27 @@ def arrays_to_tensor(X, Y, Z, XZ, device):
     return torch.FloatTensor(X).to(device), torch.FloatTensor(Y).to(device), torch.FloatTensor(Z).to(device), torch.FloatTensor(XZ).to(device)
 
 class IncomeDataset():
-    def __init__(self, device, include_age=False, include_race=False):
+    def __init__(self, 
+                 device,
+                 sensitive_feature_labels: list[str] = ["SEX"]
+                 ) -> None:
         self.device = device
+        self.sensitive_feature_labels = sensitive_feature_labels
 
-        train_dataset, test_dataset = self.preprocess_income_dataset(include_age, include_race)
+        train_dataset, test_dataset = self.preprocess_income_dataset()
 
-        self.Z_train_ = train_dataset['z']
+        self.Z_train_ = train_dataset[self.sensitive_feature_labels]
         self.Y_train_ = train_dataset['y']
-        self.X_train_ = train_dataset.drop(labels=['z','y'], axis=1)
-        self.Z_test_ = test_dataset['z']
+        self.X_train_ = train_dataset.drop(labels=[*self.sensitive_feature_labels, 'y'], axis=1)
+        self.Z_test_ = test_dataset[self.sensitive_feature_labels]
         self.Y_test_ = test_dataset['y']
-        self.X_test_ = test_dataset.drop(labels=['z','y'], axis=1)
+        self.X_test_ = test_dataset.drop(labels=[*self.sensitive_feature_labels, 'y'], axis=1)
 
         self.prepare_ndarray()
 
         self.set_improvable_features()
 
-    def preprocess_income_dataset(self, include_age=False, include_race=False):
+    def preprocess_income_dataset(self):
         '''
         Function to load and preprocess Income dataset
 
@@ -43,21 +47,22 @@ class IncomeDataset():
         ca_features, ca_labels, _ = ACSIncome.df_to_pandas(ca_data)
 
         # Sex
-        ca_features['SEX'] = ca_features['SEX'].map({2.0: 1, 1.0: 0}).astype(int)
+        if "SEX" in self.sensitive_feature_labels:
+            ca_features['SEX'] = ca_features['SEX'].map({2.0: 1, 1.0: 0}).astype(int)
 
         # Age
-        if include_age:
+        if "AGEP" in self.sensitive_feature_labels:
             ca_features['AGEP'] = (ca_features["AGEP"] > 30).astype(int)
 
         # Race
-        if include_race:
+        if "RAC1P" in self.sensitive_feature_labels:
             ca_features["RAC1P"] = ca_features["RAC1P"].astype(int)
 
-        ca_data = pd.concat([ca_features,ca_labels],axis=1)
+        ca_data = pd.concat([ca_features, ca_labels], axis=1)
 
         ca_data['PINCP'] = ca_data['PINCP'].map({True: 1, False: 0}).astype(int)
         df = ca_data
-        df=df.rename(columns = {'SEX':'z'})
+
         CategoricalFeatures=['COW','MAR', 'OCCP', 'POBP', 'RELP', 'RAC1P']
 
         df = pd.get_dummies(df, columns=CategoricalFeatures, drop_first=True)
@@ -72,8 +77,12 @@ class IncomeDataset():
 
         scaler = StandardScaler()
 
-        train_dataset[['AGEP','WKHP']] = scaler.fit_transform(train_dataset[['AGEP','WKHP']])
-        test_dataset[['AGEP','WKHP']] = scaler.transform(test_dataset[['AGEP','WKHP']])
+        if "AGEP" in self.sensitive_feature_labels:
+            train_dataset[['WKHP']] = scaler.fit_transform(train_dataset[['WKHP']])
+            test_dataset[['WKHP']] = scaler.transform(test_dataset[['WKHP']])
+        else:
+            train_dataset[['AGEP','WKHP']] = scaler.fit_transform(train_dataset[['AGEP','WKHP']])
+            test_dataset[['AGEP','WKHP']] = scaler.transform(test_dataset[['AGEP','WKHP']])
 
         return train_dataset, test_dataset
 
@@ -81,15 +90,15 @@ class IncomeDataset():
         self.X_train = self.X_train_.to_numpy(dtype=np.float64)
         self.Y_train = self.Y_train_.to_numpy(dtype=np.float64)
         self.Z_train = self.Z_train_.to_numpy(dtype=np.float64)
-        self.XZ_train = np.concatenate([self.X_train, self.Z_train.reshape(-1,1)], axis=1)
+        
+        self.XZ_train = np.concatenate([self.X_train, self.Z_train.reshape(-1, len(self.sensitive_feature_labels))], axis=1)
 
         self.X_test = self.X_test_.to_numpy(dtype=np.float64)
         self.Y_test = self.Y_test_.to_numpy(dtype=np.float64)
         self.Z_test = self.Z_test_.to_numpy(dtype=np.float64)
-        self.XZ_test = np.concatenate([self.X_test, self.Z_test.reshape(-1,1)], axis=1)
+        self.XZ_test = np.concatenate([self.X_test, self.Z_test.reshape(-1, len(self.sensitive_feature_labels))], axis=1)
         
-        self.sensitive_attrs = sorted(list(set(self.Z_train)))
-        return None
+        self.sensitive_attrs = [list(np.unique(col).astype(int)) for col in self.Z_train.T]
 
     def get_dataset_in_ndarray(self):
         return (self.X_train, self.Y_train, self.Z_train, self.XZ_train),\

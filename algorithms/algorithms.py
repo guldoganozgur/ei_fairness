@@ -109,21 +109,23 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort)
                 Pr_Ytilde1 = CDF_tau(Yhat_max.detach(),h,tau)
-                for z in sensitive_attrs:
-                    if torch.sum(z_batch_e==z)==0:
-                        continue
-                    Pr_Ytilde1_Z = CDF_tau(Yhat_max.detach()[z_batch_e==z],h,tau)
-                    m_z = z_batch_e[z_batch_e==z].shape[0]
-                    m = z_batch_e.shape[0]
 
-                    Delta_z = Pr_Ytilde1_Z-Pr_Ytilde1
-                    Delta_z_grad = torch.dot(phi((tau-Yhat_max.detach()[z_batch_e==z])/h).view(-1), 
-                                              Yhat_max[z_batch_e==z].view(-1))/h/m_z
-                    Delta_z_grad -= torch.dot(phi((tau-Yhat_max.detach())/h).view(-1), 
-                                              Yhat_max.view(-1))/h/m
+                for sensitive_attr in sensitive_attrs:
+                    for z in sensitive_attr:
+                        if torch.sum(z_batch_e==z)==0:
+                            continue
+                        Pr_Ytilde1_Z = CDF_tau(Yhat_max.detach()[z_batch_e==z],h,tau)
+                        m_z = z_batch_e[z_batch_e==z].shape[0]
+                        m = z_batch_e.shape[0]
 
-                    Delta_z_grad *= grad_Huber(Delta_z, delta_huber)
-                    f_loss += Delta_z_grad
+                        Delta_z = Pr_Ytilde1_Z-Pr_Ytilde1
+                        Delta_z_grad = torch.dot(phi((tau-Yhat_max.detach()[z_batch_e==z])/h).view(-1), 
+                                                Yhat_max[z_batch_e==z].view(-1))/h/m_z
+                        Delta_z_grad -= torch.dot(phi((tau-Yhat_max.detach())/h).view(-1), 
+                                                Yhat_max.view(-1))/h/m
+
+                        Delta_z_grad *= grad_Huber(Delta_z, delta_huber)
+                        f_loss += Delta_z_grad
 
             cost += lambda_*f_loss
             

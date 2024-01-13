@@ -118,7 +118,7 @@ def EODisparity(n_eyz, each_z = False):
         Returns for each sensitive group or max
     '''
     z_set = list(set([z for _,_, z in n_eyz.keys()]))
-    
+
     eod = []
     p11 = sum([n_eyz[(1,1,z)] for z in z_set]) / sum([n_eyz[(1,1,z)]+n_eyz[(0,1,z)] for z in z_set])
     for z in z_set:
@@ -175,14 +175,16 @@ def model_performance(Y, Z, Yhat, Yhat_max, tau):
     n_eyz = {}
     n_mez = {}
 
-    for y_hat in [0,1]: 
+    for y_hat in [0,1]:
         for y in [0,1]:
-            for z in [0,1]:
-                n_eyz[(y_hat,y,z)] = np.sum((Ypred==y_hat)*(Y==y)*(Z==z))
-                n_mez[(y_hat,y,z)] = np.sum((Ypred_max==y_hat)*(Ypred==y)*(Z==z))
+            for column in range(Z.shape[1]):
+                for z in np.unique(Z[:, column]):
+                    n_eyz[(y_hat, y, (column, z))] = np.sum((Ypred==y_hat)*(Y==y)*(Z[:, column]==z))
+                    n_mez[(y_hat, y, (column, z))] = np.sum((Ypred_max==y_hat)*(Ypred==y)*(Z[:, column]==z))
     
     for y in [0,1]:
-        for z in [0,1]:
-            n_yz[(y,z)] = np.sum((Ypred==y)*(Z==z))
+        for column in range(Z.shape[1]):
+            for z in np.unique(Z[:, column]):
+                n_yz[(y, (column, z))] = np.sum((Ypred==y)*(Z[:, column]==z))
 
     return acc, DPDisparity(n_yz), EODisparity(n_eyz), EODDDisparity(n_eyz), EIDisparity(n_mez), BEDisparity(n_mez)
