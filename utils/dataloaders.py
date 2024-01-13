@@ -10,10 +10,10 @@ def arrays_to_tensor(X, Y, Z, XZ, device):
     return torch.FloatTensor(X).to(device), torch.FloatTensor(Y).to(device), torch.FloatTensor(Z).to(device), torch.FloatTensor(XZ).to(device)
 
 class IncomeDataset():
-    def __init__(self, device):
+    def __init__(self, device, include_age=False, include_race=False):
         self.device = device
 
-        train_dataset, test_dataset = self.preprocess_income_dataset()
+        train_dataset, test_dataset = self.preprocess_income_dataset(include_age, include_race)
 
         self.Z_train_ = train_dataset['z']
         self.Y_train_ = train_dataset['y']
@@ -26,7 +26,7 @@ class IncomeDataset():
 
         self.set_improvable_features()
 
-    def preprocess_income_dataset(self):
+    def preprocess_income_dataset(self, include_age=False, include_race=False):
         '''
         Function to load and preprocess Income dataset
 
@@ -42,7 +42,16 @@ class IncomeDataset():
 
         ca_features, ca_labels, _ = ACSIncome.df_to_pandas(ca_data)
 
+        # Sex
         ca_features['SEX'] = ca_features['SEX'].map({2.0: 1, 1.0: 0}).astype(int)
+
+        # Age
+        if include_age:
+            ca_features['AGEP'] = (df["AGEP"] > 30).astype(int)
+
+        # Race
+        if include_race:
+            ca_features["RAC1P"] = ca_features["RAC1P"].astype(int)
 
         ca_data = pd.concat([ca_features,ca_labels],axis=1)
 
