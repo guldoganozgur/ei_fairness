@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 def PGD_effort(model, dataset, x, iter, lr, delta, device="cpu"):
     
-    efforts = Variable(torch.zeros(x.shape), requires_grad = True)
+    efforts = Variable(torch.zeros(x.shape, device=device), requires_grad = True)
     
     improvable_indices = []
     for i in range(efforts.shape[1]):
@@ -55,7 +55,7 @@ def Optimal_effort(model, dataset, x, delta, norm='inf', device="cpu"):
     if norm=='inf':
         efforts_update = delta * torch.sign(weights) * torch.ones(x.shape, device=device)
         efforts_update[:,improvable_indices] = torch.clamp(efforts_update[:,improvable_indices], -delta, delta)
-    elif norm=='l2':
+    else: # elif norm=='l2':
         efforts_update = delta * (weights / torch.square(torch.sum(weights*weights))) * torch.ones(x.shape, device=device)
     efforts_update[:,dataset.C_index] = torch.round(efforts_update[:,dataset.C_index])
     efforts_update[:,dataset.C_index] = torch.clamp(efforts_update[:,dataset.C_index], C_min, C_max)

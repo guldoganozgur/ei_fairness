@@ -105,9 +105,9 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
                 x_batch_e = x_batch[(Yhat<tau).reshape(-1),:]
                 z_batch_e = z_batch[(Yhat<tau).reshape(-1)]
                 if optimal_effort is True:
-                    Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device)
+                    Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device=device)
                 else:
-                    Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device)
+                    Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
                 Pr_Ytilde1 = CDF_tau(Yhat_max.detach(), h, tau)
 
                 for sensitive_attr in sensitive_attrs:
@@ -146,9 +146,9 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
 
         Yhat_train = model(train_dataset.dataset.X[train_dataset.indices]).reshape(-1).detach().cpu().numpy()
         if optimal_effort is True:
-            Yhat_max_train = Optimal_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], delta_effort, effort_norm, device)
+            Yhat_max_train = Optimal_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], delta_effort, effort_norm, device=device)
         else:
-            Yhat_max_train = PGD_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], effort_iter, effort_lr, delta_effort, device)
+            Yhat_max_train = PGD_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
         Yhat_max_train = Yhat_max_train.reshape(-1).detach().cpu().numpy()
 
         accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().cpu().numpy(),
@@ -172,21 +172,29 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
     results.train_ei_hist = ei_disparities
     results.train_be_hist = be_disparities            
 
-    Yhat_val = model(val_dataset.dataset.X[val_dataset.indices]).reshape(-1).detach().numpy()
+    Yhat_val = model(val_dataset.dataset.X[val_dataset.indices]).reshape(-1).detach().cpu().numpy()
     if optimal_effort is True:
-        Yhat_max_val = Optimal_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], delta_effort, device)
+        Yhat_max_val = Optimal_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], delta_effort, device=device)
     else:
-        Yhat_max_val = PGD_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], effort_iter, effort_lr, delta_effort, device)
-    Yhat_max_val = Yhat_max_val.reshape(-1).detach().numpy()
-    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().numpy(), val_dataset.dataset.Z[val_dataset.indices].detach().numpy(), Yhat_val, Yhat_max_val, tau)
+        Yhat_max_val = PGD_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
+    Yhat_max_val = Yhat_max_val.reshape(-1).detach().cpu().numpy()
+    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().cpu().numpy(),
+                                                                                                                          val_dataset.dataset.Z[val_dataset.indices].detach().cpu().numpy(), 
+                                                                                                                          Yhat_val, 
+                                                                                                                          Yhat_max_val,
+                                                                                                                          tau)
     
-    Yhat_test = model(test_dataset.X).reshape(-1).detach().numpy()
+    Yhat_test = model(test_dataset.X).reshape(-1).detach().cpu().numpy()
     if optimal_effort is True:
-        Yhat_max_test = Optimal_effort(model, dataset, test_dataset.X, delta_effort, effort_norm, device)
+        Yhat_max_test = Optimal_effort(model, dataset, test_dataset.X, delta_effort, effort_norm, device=device)
     else:
-        Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device)
-    Yhat_max_test = Yhat_max_test.reshape(-1).detach().numpy()
-    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().numpy(), Z_test.detach().numpy(), Yhat_test, Yhat_max_test, tau)
+        Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device=device)
+    Yhat_max_test = Yhat_max_test.reshape(-1).detach().cpu().numpy()
+    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(), 
+                                                                                                                                Z_test.detach().cpu().numpy(), 
+                                                                                                                                Yhat_test, 
+                                                                                                                                Yhat_max_test, 
+                                                                                                                                tau)
 
     return results
 
@@ -249,9 +257,9 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                 x_batch_e = x_batch[(Yhat<tau).reshape(-1),:]
                 z_batch_e = z_batch[(Yhat<tau).reshape(-1)]
                 if optimal_effort is True:
-                    Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device)
+                    Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device=device)
                 else:
-                    Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device)
+                    Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
 
                 loss_mean = loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max)))
                 loss_z = torch.zeros(len(sensitive_attrs), device = device)
@@ -267,9 +275,9 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                 x_batch_e = x_batch[(Yhat<tau).reshape(-1),:]
                 z_batch_e = z_batch[(Yhat<tau).reshape(-1)]
                 if optimal_effort is True:
-                    Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device)
+                    Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device=device)
                 else:
-                    Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device)
+                    Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
 
                 loss_mean = (len(x_batch_e)/len(x_batch))*loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max)))
                 loss_z = torch.zeros(len(sensitive_attrs), device = device)
@@ -298,14 +306,14 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
         p_losses.append(np.mean(local_p_loss))
         f_losses.append(np.mean(local_f_loss))
 
-        Yhat_train = model(train_dataset.dataset.X[train_dataset.indices]).reshape(-1).detach().numpy()
+        Yhat_train = model(train_dataset.dataset.X[train_dataset.indices]).reshape(-1).detach().cpu().numpy()
         if optimal_effort is True:
-            Yhat_max_train = Optimal_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], delta_effort, effort_norm, device)
+            Yhat_max_train = Optimal_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], delta_effort, effort_norm, device=device)
         else:
-            Yhat_max_train = PGD_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], effort_iter, effort_lr, delta_effort, device)
-        Yhat_max_train = Yhat_max_train.reshape(-1).detach().numpy()
+            Yhat_max_train = PGD_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
+        Yhat_max_train = Yhat_max_train.reshape(-1).detach().cpu().numpy()
 
-        accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().numpy(), train_dataset.dataset.Z[train_dataset.indices].detach().numpy(), Yhat_train, Yhat_max_train, tau)
+        accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().cpu().numpy(), train_dataset.dataset.Z[train_dataset.indices].detach().cpu().numpy(), Yhat_train, Yhat_max_train, tau)
         accuracies.append(accuracy)
         dp_disparities.append(dp_disparity)
         eo_disparities.append(eo_disparity)
@@ -322,21 +330,21 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
     results.train_ei_hist = ei_disparities  
     results.train_be_hist = be_disparities       
 
-    Yhat_val = model(val_dataset.dataset.X[val_dataset.indices]).reshape(-1).detach().numpy()
+    Yhat_val = model(val_dataset.dataset.X[val_dataset.indices]).reshape(-1).detach().cpu().numpy()
     if optimal_effort is True:
-        Yhat_max_val = Optimal_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], delta_effort, effort_norm, device)
+        Yhat_max_val = Optimal_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], delta_effort, effort_norm, device=device)
     else:
-        Yhat_max_val = PGD_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], effort_iter, effort_lr, delta_effort, device)
-    Yhat_max_val = Yhat_max_val.reshape(-1).detach().numpy()
-    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().numpy(), val_dataset.dataset.Z[val_dataset.indices].detach().numpy(), Yhat_val, Yhat_max_val, tau)
+        Yhat_max_val = PGD_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
+    Yhat_max_val = Yhat_max_val.reshape(-1).detach().cpu().numpy()
+    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().cpu().numpy(), val_dataset.dataset.Z[val_dataset.indices].detach().cpu().numpy(), Yhat_val, Yhat_max_val, tau)
     
-    Yhat_test = model(test_dataset.X).reshape(-1).detach().numpy()
+    Yhat_test = model(test_dataset.X).reshape(-1).detach().cpu().numpy()
     if optimal_effort is True:
-        Yhat_max_test = Optimal_effort(model, dataset, test_dataset.X, delta_effort, effort_norm, device)
+        Yhat_max_test = Optimal_effort(model, dataset, test_dataset.X, delta_effort, effort_norm, device=device)
     else:
-        Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device)
-    Yhat_max_test = Yhat_max_test.reshape(-1).detach().numpy()
-    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().numpy(), Z_test.detach().numpy(), Yhat_test, Yhat_max_test, tau)
+        Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device=device)
+    Yhat_max_test = Yhat_max_test.reshape(-1).detach().cpu().numpy()
+    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(), Z_test.detach().cpu().numpy(), Yhat_test, Yhat_max_test, tau)
 
     return results
 
@@ -400,9 +408,9 @@ def trainer_fc_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                 x_batch_e = x_batch[(Yhat<tau).reshape(-1),:]
                 z_batch_e = z_batch[(Yhat<tau).reshape(-1)]
                 if optimal_effort is True:
-                    Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device)
+                    Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device=device)
                 else:
-                    Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device)
+                    Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
                 f_loss += torch.square(torch.mean((z_batch_e-z_batch_e.mean())*Yhat_max.reshape(-1)))
 
             cost += lambda_*f_loss
@@ -422,14 +430,14 @@ def trainer_fc_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
         p_losses.append(np.mean(local_p_loss))
         f_losses.append(np.mean(local_f_loss))
 
-        Yhat_train = model(train_dataset.dataset.X[train_dataset.indices]).reshape(-1).detach().numpy()
+        Yhat_train = model(train_dataset.dataset.X[train_dataset.indices]).reshape(-1).detach().cpu().numpy()
         if optimal_effort is True:
-            Yhat_max_train = Optimal_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], delta_effort, effort_norm, device)
+            Yhat_max_train = Optimal_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], delta_effort, effort_norm, device=device)
         else:
-            Yhat_max_train = PGD_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], effort_iter, effort_lr, delta_effort, device)
-        Yhat_max_train = Yhat_max_train.reshape(-1).detach().numpy()
+            Yhat_max_train = PGD_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
+        Yhat_max_train = Yhat_max_train.reshape(-1).detach().cpu().numpy()
 
-        accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().numpy(), train_dataset.dataset.Z[train_dataset.indices].detach().numpy(), Yhat_train, Yhat_max_train, tau)
+        accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().cpu().numpy(), train_dataset.dataset.Z[train_dataset.indices].detach().cpu().numpy(), Yhat_train, Yhat_max_train, tau)
         accuracies.append(accuracy)
         dp_disparities.append(dp_disparity)
         eo_disparities.append(eo_disparity)
@@ -446,20 +454,20 @@ def trainer_fc_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
     results.train_ei_hist = ei_disparities 
     results.train_be_hist = be_disparities        
 
-    Yhat_val = model(val_dataset.dataset.X[val_dataset.indices]).reshape(-1).detach().numpy()
+    Yhat_val = model(val_dataset.dataset.X[val_dataset.indices]).reshape(-1).detach().cpu().numpy()
     if optimal_effort is True:
-        Yhat_max_val = Optimal_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], delta_effort, effort_norm, device)
+        Yhat_max_val = Optimal_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], delta_effort, effort_norm, device=device)
     else:
-        Yhat_max_val = PGD_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], effort_iter, effort_lr, delta_effort, device)
-    Yhat_max_val = Yhat_max_val.reshape(-1).detach().numpy()
-    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().numpy(), val_dataset.dataset.Z[val_dataset.indices].detach().numpy(), Yhat_val, Yhat_max_val, tau)
+        Yhat_max_val = PGD_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
+    Yhat_max_val = Yhat_max_val.reshape(-1).detach().cpu().numpy()
+    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().cpu().numpy(), val_dataset.dataset.Z[val_dataset.indices].detach().cpu().numpy(), Yhat_val, Yhat_max_val, tau)
     
-    Yhat_test = model(test_dataset.X).reshape(-1).detach().numpy()
+    Yhat_test = model(test_dataset.X).reshape(-1).detach().cpu().numpy()
     if optimal_effort is True:
-        Yhat_max_test = Optimal_effort(model, dataset, test_dataset.X, delta_effort, effort_norm, device)
+        Yhat_max_test = Optimal_effort(model, dataset, test_dataset.X, delta_effort, effort_norm, device=device)
     else:
-        Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device)
-    Yhat_max_test = Yhat_max_test.reshape(-1).detach().numpy()
-    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().numpy(), Z_test.detach().numpy(), Yhat_test, Yhat_max_test, tau)
+        Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device=device)
+    Yhat_max_test = Yhat_max_test.reshape(-1).detach().cpu().numpy()
+    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(), Z_test.detach().cpu().numpy(), Yhat_test, Yhat_max_test, tau)
 
     return results
