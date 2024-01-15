@@ -110,17 +110,17 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
                 Pr_Ytilde1 = CDF_tau(Yhat_max.detach(), h, tau)
 
-                for sensitive_attr in sensitive_attrs:
+                for sensitive_attr_idx, sensitive_attr in enumerate(sensitive_attrs):
                     for z in sensitive_attr:
-                        if torch.sum(z_batch_e==z)==0:
+                        if torch.sum(z_batch_e[:, sensitive_attr_idx]==z)==0: # we have actually coded the 4 separate groups here
                             continue
-                        Pr_Ytilde1_Z = CDF_tau(Yhat_max.detach()[z_batch_e==z],h,tau)
-                        m_z = z_batch_e[z_batch_e==z].shape[0]
-                        m = z_batch_e.shape[0]
+                        Pr_Ytilde1_Z = CDF_tau(Yhat_max.detach()[z_batch_e[:, sensitive_attr_idx]==z],h,tau)
+                        m_z = z_batch_e[z_batch_e[:, sensitive_attr_idx]==z].shape[0]
+                        m = z_batch_e[:, sensitive_attr_idx].shape[0]
 
                         Delta_z = Pr_Ytilde1_Z-Pr_Ytilde1
-                        Delta_z_grad = torch.dot(phi((tau-Yhat_max.detach()[z_batch_e==z])/h).view(-1), 
-                                                Yhat_max[z_batch_e==z].view(-1))/h/m_z
+                        Delta_z_grad = torch.dot(phi((tau-Yhat_max.detach()[z_batch_e[:, sensitive_attr_idx]==z])/h).view(-1), 
+                                                Yhat_max[z_batch_e[:, sensitive_attr_idx]==z].view(-1))/h/m_z
                         Delta_z_grad -= torch.dot(phi((tau-Yhat_max.detach())/h).view(-1), 
                                                 Yhat_max.view(-1))/h/m
 
@@ -261,15 +261,16 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
 
-                loss_mean = loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max)))
-                loss_z = torch.zeros(len(sensitive_attrs), device = device)
-                for z in sensitive_attrs:
-                    z = int(z)
-                    group_idx = z_batch_e == z
-                    if group_idx.sum() == 0:
-                        continue
-                    loss_z[z] = loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(group_idx.sum()))
-                    f_loss += torch.abs(loss_z[z] - loss_mean)
+                loss_mean = loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max), device=device))
+                loss_z = torch.zeros_like(torch.Tensor(sensitive_attrs), device=device)
+                for sensitive_attr_idx, sensitive_attr in enumerate(sensitive_attrs):
+                    for z in sensitive_attr:
+                        z = int(z)
+                        group_idx = z_batch_e[:, sensitive_attr_idx] == z
+                        if group_idx.sum() == 0:
+                            continue
+                        loss_z[sensitive_attr_idx][z] = loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(group_idx.sum(), device=device))
+                        f_loss += torch.abs(loss_z[sensitive_attr_idx][z] - loss_mean)
                     
             elif fairness == 'BE':
                 x_batch_e = x_batch[(Yhat<tau).reshape(-1),:]
@@ -279,15 +280,16 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
 
-                loss_mean = (len(x_batch_e)/len(x_batch))*loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max)))
-                loss_z = torch.zeros(len(sensitive_attrs), device = device)
-                for z in sensitive_attrs:
-                    z = int(z)
-                    group_idx = z_batch_e == z
-                    if group_idx.sum() == 0:
-                        continue
-                    loss_z[z] = (z_batch_e[z_batch_e==z].shape[0]/z_batch[z_batch==z].shape[0])*loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(group_idx.sum()))
-                    f_loss += torch.abs(loss_z[z] - loss_mean)
+                loss_mean = (len(x_batch_e)/len(x_batch)) * loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max), device=device))
+                loss_z = torch.zeros_like(torch.Tensor(sensitive_attrs), device=device)
+                for sensitive_attr_idx, sensitive_attr in enumerate(sensitive_attrs):
+                    for z in sensitive_attr:
+                        z = int(z)
+                        group_idx = z_batch_e[:, sensitive_attr_idx] == z
+                        if group_idx.sum() == 0:
+                            continue
+                        loss_z[sensitive_attr_idx][z] = (z_batch_e[z_batch_e==z].shape[0]/z_batch[z_batch==z].shape[0])*loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(group_idx.sum(), device=device))
+                        f_loss += torch.abs(loss_z[sensitive_attr_idx][z] - loss_mean)
 
             cost += lambda_*f_loss
             
@@ -411,7 +413,9 @@ def trainer_fc_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                     Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device=device)
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
-                f_loss += torch.square(torch.mean((z_batch_e-z_batch_e.mean())*Yhat_max.reshape(-1)))
+                
+                # Handle multiple features
+                f_loss += torch.square(torch.mean((z_batch_e-z_batch_e.mean())*Yhat_max))
 
             cost += lambda_*f_loss
             
