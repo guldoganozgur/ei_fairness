@@ -85,21 +85,20 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
     accuracies = []
 
     for epoch in tqdm.trange(n_epochs, desc="Training", unit="epochs"):
-        
         local_p_loss = []
         local_f_loss = []
 
         for _, (x_batch, y_batch, z_batch) in enumerate(train_loader):
             x_batch, y_batch, z_batch = x_batch.to(device), y_batch.to(device), z_batch.to(device)
             Yhat = model(x_batch)
-            
-            cost = 0
 
-            # prediction loss
-            p_loss = loss_func(Yhat.reshape(-1), y_batch)
-            cost += (1-lambda_)*p_loss
-
+            # Feature loss
             f_loss = 0
+            # Prediction loss
+            p_loss = loss_func(Yhat.reshape(-1), y_batch)
+            cost = (1-lambda_) * p_loss
+
+
             # EI_Constraint (Equal Improvability)
             if fairness == 'EI' and torch.sum(Yhat<tau)>0:
                 x_batch_e = x_batch[(Yhat<tau).reshape(-1),:]
@@ -111,32 +110,40 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
                 Pr_Ytilde1 = CDF_tau(Yhat_max.detach(), h, tau)
 
                 for sensitive_attr_idx, sensitive_attr in enumerate(sensitive_attrs):
+                    f_loss = 0
                     for z in sensitive_attr:
-                        if torch.sum(z_batch_e[:, sensitive_attr_idx]==z)==0: # we have actually coded the 4 separate groups here
+                        if torch.sum(z_batch_e[:, sensitive_attr_idx]==z)==0:
                             continue
+
                         Pr_Ytilde1_Z = CDF_tau(Yhat_max.detach()[z_batch_e[:, sensitive_attr_idx]==z],h,tau)
-                        m_z = z_batch_e[z_batch_e[:, sensitive_attr_idx]==z].shape[0]
+                        m_z = z_batch_e[z_batch_e[:, sensitive_attr_idx]==z, sensitive_attr_idx].shape[0]
                         m = z_batch_e[:, sensitive_attr_idx].shape[0]
 
-                        Delta_z = Pr_Ytilde1_Z-Pr_Ytilde1
-                        Delta_z_grad = torch.dot(phi((tau-Yhat_max.detach()[z_batch_e[:, sensitive_attr_idx]==z])/h).view(-1), 
-                                                Yhat_max[z_batch_e[:, sensitive_attr_idx]==z].view(-1))/h/m_z
-                        Delta_z_grad -= torch.dot(phi((tau-Yhat_max.detach())/h).view(-1), 
-                                                Yhat_max.view(-1))/h/m
+                        Delta_z = Pr_Ytilde1_Z - Pr_Ytilde1
+                        Delta_z_grad = torch.dot(
+                            phi((tau - Yhat_max.detach()[z_batch_e[:, sensitive_attr_idx]==z])/h).view(-1),
+                            Yhat_max[z_batch_e[:, sensitive_attr_idx]==z].view(-1)
+                            ) / h / m_z
+
+                        Delta_z_grad -= torch.dot(
+                            phi((tau-Yhat_max.detach())/h).view(-1), 
+                            Yhat_max.view(-1)
+                            ) / h / m
 
                         Delta_z_grad *= grad_Huber(Delta_z, delta_huber)
                         f_loss += Delta_z_grad
-
-            cost += lambda_*f_loss
+                    cost += lambda_ * f_loss
             
             optimizer.zero_grad()
+
             if (torch.isnan(cost)).any():
                 continue
+
             cost.backward()
             optimizer.step()
-
             local_p_loss.append(p_loss.item())
-            if hasattr(f_loss,'item'):
+
+            if hasattr(f_loss, 'item'):
                 local_f_loss.append(f_loss.item())
             else:
                 local_f_loss.append(f_loss)
@@ -180,7 +187,7 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
     Yhat_max_val = Yhat_max_val.reshape(-1).detach().cpu().numpy()
     results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().cpu().numpy(),
                                                                                                                           val_dataset.dataset.Z[val_dataset.indices].detach().cpu().numpy(), 
-                                                                                                                          Yhat_val, 
+                                                                                                                          Yhat_val,
                                                                                                                           Yhat_max_val,
                                                                                                                           tau)
     
@@ -190,10 +197,10 @@ def trainer_kde_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_
     else:
         Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device=device)
     Yhat_max_test = Yhat_max_test.reshape(-1).detach().cpu().numpy()
-    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(), 
+    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(),
                                                                                                                                 Z_test.detach().cpu().numpy(), 
-                                                                                                                                Yhat_test, 
-                                                                                                                                Yhat_max_test, 
+                                                                                                                                Yhat_test,
+                                                                                                                                Yhat_max_test,
                                                                                                                                 tau)
 
     return results
@@ -243,14 +250,12 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
         for _, (x_batch, y_batch, z_batch) in enumerate(train_loader):
             x_batch, y_batch, z_batch = x_batch.to(device), y_batch.to(device), z_batch.to(device)
             Yhat = model(x_batch)
-            
-            cost = 0
 
-            # prediction loss
-            p_loss = loss_func(Yhat.reshape(-1), y_batch)
-            cost += (1-lambda_)*p_loss
-
+            # Feature loss
             f_loss = 0
+            # Prediction loss
+            p_loss = loss_func(Yhat.reshape(-1), y_batch)
+            cost = (1-lambda_)*p_loss
 
             # EI_Constraint (Equal Improvability)
             if fairness == 'EI' and torch.sum(Yhat<tau)>0:
@@ -261,37 +266,41 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
 
-                loss_mean = loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max), device=device))
-                loss_z = torch.zeros_like(torch.Tensor(sensitive_attrs), device=device)
                 for sensitive_attr_idx, sensitive_attr in enumerate(sensitive_attrs):
+                    loss_z = torch.zeros(len(sensitive_attr), device=device)
                     for z in sensitive_attr:
-                        z = int(z)
                         group_idx = z_batch_e[:, sensitive_attr_idx] == z
-                        if group_idx.sum() == 0:
+                        num_group_samples = group_idx.sum()
+
+                        if num_group_samples == 0:
                             continue
-                        loss_z[sensitive_attr_idx][z] = loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(group_idx.sum(), device=device))
-                        f_loss += torch.abs(loss_z[sensitive_attr_idx][z] - loss_mean)
+
+                        loss_z[z] = loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(num_group_samples, device=device))
+                    loss_mean = torch.mean(loss_z)
+                    f_loss = torch.sum(torch.abs(loss_z[z] - loss_mean))
+                    cost += lambda_ * f_loss
                     
             elif fairness == 'BE':
-                x_batch_e = x_batch[(Yhat<tau).reshape(-1),:]
+                x_batch_e = x_batch[(Yhat<tau).reshape(-1), :]
                 z_batch_e = z_batch[(Yhat<tau).reshape(-1)]
                 if optimal_effort is True:
                     Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device=device)
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
 
-                loss_mean = (len(x_batch_e)/len(x_batch)) * loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max), device=device))
-                loss_z = torch.zeros_like(torch.Tensor(sensitive_attrs), device=device)
                 for sensitive_attr_idx, sensitive_attr in enumerate(sensitive_attrs):
+                    loss_z = torch.zeros(len(sensitive_attrs), device=device)
                     for z in sensitive_attr:
-                        z = int(z)
                         group_idx = z_batch_e[:, sensitive_attr_idx] == z
-                        if group_idx.sum() == 0:
-                            continue
-                        loss_z[sensitive_attr_idx][z] = (z_batch_e[z_batch_e==z].shape[0]/z_batch[z_batch==z].shape[0])*loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(group_idx.sum(), device=device))
-                        f_loss += torch.abs(loss_z[sensitive_attr_idx][z] - loss_mean)
+                        num_group_samples = group_idx.sum()
 
-            cost += lambda_*f_loss
+                        if num_group_samples == 0:
+                            continue
+
+                        loss_z[z] = (z_batch_e[group_idx, sensitive_attr_idx].shape[0] / z_batch[z_batch[:, sensitive_attr_idx]==z, sensitive_attr_idx].shape[0]) * loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(num_group_samples, device=device))
+                    loss_mean = torch.mean(loss_z)
+                    f_loss = torch.sum(torch.abs(loss_z[z] - loss_mean))
+                    cost += lambda_ * f_loss
             
             optimizer.zero_grad()
             if (torch.isnan(cost)).any():
@@ -315,7 +324,11 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
             Yhat_max_train = PGD_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
         Yhat_max_train = Yhat_max_train.reshape(-1).detach().cpu().numpy()
 
-        accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().cpu().numpy(), train_dataset.dataset.Z[train_dataset.indices].detach().cpu().numpy(), Yhat_train, Yhat_max_train, tau)
+        accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().cpu().numpy(),
+                                                                                                             train_dataset.dataset.Z[train_dataset.indices].detach().cpu().numpy(),
+                                                                                                             Yhat_train,
+                                                                                                             Yhat_max_train,
+                                                                                                             tau)
         accuracies.append(accuracy)
         dp_disparities.append(dp_disparity)
         eo_disparities.append(eo_disparity)
@@ -338,7 +351,11 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
     else:
         Yhat_max_val = PGD_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
     Yhat_max_val = Yhat_max_val.reshape(-1).detach().cpu().numpy()
-    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().cpu().numpy(), val_dataset.dataset.Z[val_dataset.indices].detach().cpu().numpy(), Yhat_val, Yhat_max_val, tau)
+    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().cpu().numpy(),
+                                                                                                                          val_dataset.dataset.Z[val_dataset.indices].detach().cpu().numpy(),
+                                                                                                                          Yhat_val,
+                                                                                                                          Yhat_max_val,
+                                                                                                                          tau)
     
     Yhat_test = model(test_dataset.X).reshape(-1).detach().cpu().numpy()
     if optimal_effort is True:
@@ -346,7 +363,11 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
     else:
         Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device=device)
     Yhat_max_test = Yhat_max_test.reshape(-1).detach().cpu().numpy()
-    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(), Z_test.detach().cpu().numpy(), Yhat_test, Yhat_max_test, tau)
+    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(),
+                                                                                                                                Z_test.detach().cpu().numpy(),
+                                                                                                                                Yhat_test,
+                                                                                                                                Yhat_max_test,
+                                                                                                                                tau)
 
     return results
 
@@ -397,27 +418,24 @@ def trainer_fc_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
             x_batch, y_batch, z_batch = x_batch.to(device), y_batch.to(device), z_batch.to(device)
             Yhat = model(x_batch)
             
-            cost = 0
-
-            # prediction loss
-            p_loss = loss_func(Yhat.reshape(-1), y_batch)
-            cost += (1-lambda_)*p_loss
-
+            # Feature loss
             f_loss = 0
+            # Prediction loss
+            p_loss = loss_func(Yhat.reshape(-1), y_batch)
+            cost = (1 - lambda_) * p_loss
 
             # EI_Constraint (Equal Improvability)
             if fairness == 'EI' and torch.sum(Yhat<tau)>0:
-                x_batch_e = x_batch[(Yhat<tau).reshape(-1),:]
+                x_batch_e = x_batch[(Yhat<tau).reshape(-1)]
                 z_batch_e = z_batch[(Yhat<tau).reshape(-1)]
                 if optimal_effort is True:
                     Yhat_max = Optimal_effort(model, dataset, x_batch_e, delta_effort, effort_norm, device=device)
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
-                
-                # Handle multiple features
-                f_loss += torch.square(torch.mean((z_batch_e-z_batch_e.mean())*Yhat_max))
 
-            cost += lambda_*f_loss
+                # Handle multiple features
+                f_loss = torch.sum(torch.square(torch.mean((z_batch_e - z_batch_e.mean(axis=0)) * Yhat_max, axis=0)))
+            cost += lambda_ * f_loss
             
             optimizer.zero_grad()
             if (torch.isnan(cost)).any():
@@ -441,7 +459,11 @@ def trainer_fc_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
             Yhat_max_train = PGD_effort(model, dataset, train_dataset.dataset.X[train_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
         Yhat_max_train = Yhat_max_train.reshape(-1).detach().cpu().numpy()
 
-        accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().cpu().numpy(), train_dataset.dataset.Z[train_dataset.indices].detach().cpu().numpy(), Yhat_train, Yhat_max_train, tau)
+        accuracy, dp_disparity, eo_disparity, eodd_disparity, ei_disparity, be_disparity = model_performance(train_dataset.dataset.Y[train_dataset.indices].detach().cpu().numpy(),
+                                                                                                             train_dataset.dataset.Z[train_dataset.indices].detach().cpu().numpy(),
+                                                                                                             Yhat_train,
+                                                                                                             Yhat_max_train,
+                                                                                                             tau)
         accuracies.append(accuracy)
         dp_disparities.append(dp_disparity)
         eo_disparities.append(eo_disparity)
@@ -464,7 +486,11 @@ def trainer_fc_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
     else:
         Yhat_max_val = PGD_effort(model, dataset, val_dataset.dataset.X[val_dataset.indices], effort_iter, effort_lr, delta_effort, device=device)
     Yhat_max_val = Yhat_max_val.reshape(-1).detach().cpu().numpy()
-    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().cpu().numpy(), val_dataset.dataset.Z[val_dataset.indices].detach().cpu().numpy(), Yhat_val, Yhat_max_val, tau)
+    results.val_acc, results.val_dp, results.val_eo, results.val_eodd, results.val_ei, results.val_be = model_performance(val_dataset.dataset.Y[val_dataset.indices].detach().cpu().numpy(),
+                                                                                                                          val_dataset.dataset.Z[val_dataset.indices].detach().cpu().numpy(),
+                                                                                                                          Yhat_val,
+                                                                                                                          Yhat_max_val,
+                                                                                                                          tau)
     
     Yhat_test = model(test_dataset.X).reshape(-1).detach().cpu().numpy()
     if optimal_effort is True:
@@ -472,6 +498,10 @@ def trainer_fc_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
     else:
         Yhat_max_test = PGD_effort(model, dataset, test_dataset.X, effort_iter, effort_lr, delta_effort, device=device)
     Yhat_max_test = Yhat_max_test.reshape(-1).detach().cpu().numpy()
-    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(), Z_test.detach().cpu().numpy(), Yhat_test, Yhat_max_test, tau)
+    results.test_acc, results.test_dp, results.test_eo, results.test_eodd, results.test_ei, results.test_be = model_performance(Y_test.detach().cpu().numpy(),
+                                                                                                                                Z_test.detach().cpu().numpy(),
+                                                                                                                                Yhat_test,
+                                                                                                                                Yhat_max_test,
+                                                                                                                                tau)
 
     return results

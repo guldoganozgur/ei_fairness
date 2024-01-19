@@ -195,8 +195,7 @@ class GermanDataset():
         self.Z_test = self.Z_test_.to_numpy(dtype=np.float64)
         self.XZ_test = np.concatenate([self.X_test, self.Z_test.reshape(-1,1)], axis=1)
         
-        self.sensitive_attrs = sorted(list(set(self.Z_train)))
-        return None
+        self.sensitive_attrs = [list(np.unique(col).astype(int)) for col in self.Z_train.T]
 
     def get_dataset_in_ndarray(self):
         return (self.X_train, self.Y_train, self.Z_train, self.XZ_train),\
@@ -234,22 +233,44 @@ class SyntheticDataset():
 
         self.set_improvable_features()
 
-    def createData(self, train_samples=16000, test_samples=4000, z1_mean=0.3, z2_mean=0.5):
-    
+    def createData(self, 
+                   train_samples=16000, 
+                   test_samples=4000, 
+                   z1_mean=0.3, 
+                   z2_mean=0.5,
+                   distribution="normal",
+                   params: dict = None
+                   ) -> tuple[np.ndarray, np.ndarray]:
         num_samples = train_samples + test_samples
-        
         xs, ys, zs = [], [], []
 
-        x_dist = {(1,1): {'mean': (0.4,0.3), 'cov': np.array([[0.1,0.0], [0.0,0.1]])},
-              (1,0): {'mean': (0.1,0.4), 'cov': np.array([[0.2,0.0], [0.0,0.2]])},
-              (0,0):  {'mean':(-0.1,-0.2), 'cov': np.array([[0.4,0.0], [0.0,0.4]])},
-              (0,1): {'mean': (-0.2,-0.3), 'cov': np.array([[0.2,0.0], [0.0,0.2]])}}
         y_means = [z1_mean, z2_mean]
         np.random.seed(0)
         for i in range(num_samples):
             z = np.random.binomial(n = 1, p = 0.4, size = 1)[0]
             y = np.random.binomial(n = 1, p = y_means[z], size = 1)[0]
-            x = np.random.multivariate_normal(mean = x_dist[(y,z)]['mean'], cov = x_dist[(y,z)]['cov'], size = 1)[0]
+
+            if distribution == "exponential":
+                x = np.array([
+                  np.random.exponential(scale=params["exp"]["scale_1"], size=1),
+                  np.random.exponential(scale=params["exp"]["scale_2"], size=1),  
+                ])
+            if distribution == "poisson":
+                x = np.array([
+                    np.random.poisson(lam=params["poisson"]["lambda_1"], size=1),
+                    np.random.poisson(lam=params["poisson"]["lambda_2"], size=1)
+                ])
+            else: #distribution == "normal":
+                x_dist = {
+                    (1,1): {'mean': (0.4,0.3), 'cov': np.array([[0.1,0.0], [0.0,0.1]])},
+                    (1,0): {'mean': (0.1,0.4), 'cov': np.array([[0.2,0.0], [0.0,0.2]])},
+                    (0,0):  {'mean':(-0.1,-0.2), 'cov': np.array([[0.4,0.0], [0.0,0.4]])},
+                    (0,1): {'mean': (-0.2,-0.3), 'cov': np.array([[0.2,0.0], [0.0,0.2]])}
+                    }
+                x = np.random.multivariate_normal(mean = x_dist[(y,z)]['mean'], cov = x_dist[(y,z)]['cov'], size = 1)[0]
+                # x = np.random.multivariate_normal(mean = x_dist[(y,z)]['mean'], cov = x_dist[(y,z)]['cov'], size = 1)[0]
+                
+
             xs.append(x)
             ys.append(y)
             zs.append(z)
@@ -273,9 +294,8 @@ class SyntheticDataset():
         self.Y_test = self.Y_test_.to_numpy(dtype=np.float64)
         self.Z_test = self.Z_test_.to_numpy(dtype=np.float64)
         self.XZ_test = np.concatenate([self.X_test, self.Z_test.reshape(-1,1)], axis=1)
-        
-        self.sensitive_attrs = sorted(list(set(self.Z_train)))
-        return None
+
+        self.sensitive_attrs = [list(np.unique(col).astype(int)) for col in self.Z_train.T]
 
     def get_dataset_in_ndarray(self):
         return (self.X_train, self.Y_train, self.Z_train, self.XZ_train),\
