@@ -119,17 +119,18 @@ class IncomeDataset():
         self.C_max = [24]
 
 class GermanDataset():
-    def __init__(self, device):
+    def __init__(self, device, sensitive_feature_labels: list[str] = ["Age"]):
         self.device = device
+        self.sensitive_feature_labels = sensitive_feature_labels
 
         train_dataset, test_dataset = self.preprocess_german_dataset()
 
-        self.Z_train_ = train_dataset['z']
+        self.Z_train_ = train_dataset[self.sensitive_feature_labels]
         self.Y_train_ = train_dataset['y']
-        self.X_train_ = train_dataset.drop(labels=['z','y'], axis=1)
-        self.Z_test_ = test_dataset['z']
+        self.X_train_ = train_dataset.drop(labels=[*self.sensitive_feature_labels, 'y'], axis=1)
+        self.Z_test_ = test_dataset[self.sensitive_feature_labels]
         self.Y_test_ = test_dataset['y']
-        self.X_test_ = test_dataset.drop(labels=['z','y'], axis=1)
+        self.X_test_ = test_dataset.drop(labels=[*self.sensitive_feature_labels, 'y'], axis=1)
 
         self.prepare_ndarray()
 
@@ -151,36 +152,40 @@ class GermanDataset():
         dataset.columns=['Existing-Account-Status','Month-Duration','Credit-History','Purpose','Credit-Amount','Saving-Account','Present-Employment','Instalment-Rate','Sex','Guarantors','Residence','Property','Age','Installment','Housing','Existing-Credits','Job','Num-People','Telephone','Foreign-Worker','Status']
         dataset.head(5)
 
-        CategoricalFeatures=['Credit-History','Purpose','Present-Employment', 'Sex','Guarantors','Property','Installment','Telephone','Foreign-Worker','Existing-Account-Status','Saving-Account','Housing','Job']
-
+        CategoricalFeatures=['Credit-History','Purpose','Present-Employment','Guarantors','Property','Installment','Telephone','Foreign-Worker','Existing-Account-Status','Saving-Account','Housing','Job']
         NumericalFeatures =['Month-Duration','Credit-Amount']
 
-        data_encode=dataset.copy()
+        data_encode = dataset.copy()
+        
+        if "Age" in self.sensitive_feature_labels:
+            data_encode['Age'] = (data_encode["Age"] > 30).astype(int)
+
+        if "Sex" in self.sensitive_feature_labels:
+            # A91 : male   : divorced/separated
+	        # A92 : female : divorced/separated/married
+            # A93 : male   : single
+	        # A94 : male   : married/widowed
+	        # A95 : female : single
+            sex_mapping = {'A91': 1, 'A92': 0, 'A93': 1, 'A94': 1, 'A95': 0}
+            data_encode['Sex'] = data_encode["Sex"].map(sex_mapping).astype(int)
+        else:
+            CategoricalFeatures.append("Sex")
+
         label_encoder = LabelEncoder()
         for x in CategoricalFeatures:
-            data_encode[x]=label_encoder.fit_transform(data_encode[x])
+            data_encode[x] = label_encoder.fit_transform(data_encode[x])
             data_encode[x].unique()
-        data_encode.head(5)
 
-        data_encode.loc[data_encode['Age']<=30,'Age'] = 0
-        data_encode.loc[data_encode['Age']>30,'Age'] = 1
-
-
-        data_encode=data_encode.rename(columns = {'Age':'z'})
-
-        data_encode
-
-        data_encode.loc[data_encode['Status']==2,'Status'] = 0
+        data_encode.loc[data_encode['Status'] == 2,'Status'] = 0
         data_encode=data_encode.rename(columns = {'Status':'y'})
-        data_encode
-
-        scaler = StandardScaler()
 
         train_dataset = data_encode[:800].copy()
-        train_dataset[NumericalFeatures] = scaler.fit_transform(train_dataset[NumericalFeatures])
         test_dataset = data_encode[800:].copy()
+
+        scaler = StandardScaler()
+        train_dataset[NumericalFeatures] = scaler.fit_transform(train_dataset[NumericalFeatures])
         test_dataset[NumericalFeatures] = scaler.transform(test_dataset[NumericalFeatures])
-        
+
         return train_dataset, test_dataset
         
 
@@ -188,12 +193,12 @@ class GermanDataset():
         self.X_train = self.X_train_.to_numpy(dtype=np.float64)
         self.Y_train = self.Y_train_.to_numpy(dtype=np.float64)
         self.Z_train = self.Z_train_.to_numpy(dtype=np.float64)
-        self.XZ_train = np.concatenate([self.X_train, self.Z_train.reshape(-1,1)], axis=1)
+        self.XZ_train = np.concatenate([self.X_train, self.Z_train.reshape(-1, len(self.sensitive_feature_labels))], axis=1)
 
         self.X_test = self.X_test_.to_numpy(dtype=np.float64)
         self.Y_test = self.Y_test_.to_numpy(dtype=np.float64)
         self.Z_test = self.Z_test_.to_numpy(dtype=np.float64)
-        self.XZ_test = np.concatenate([self.X_test, self.Z_test.reshape(-1,1)], axis=1)
+        self.XZ_test = np.concatenate([self.X_test, self.Z_test.reshape(-1, len(self.sensitive_feature_labels))], axis=1)
         
         self.sensitive_attrs = [list(np.unique(col).astype(int)) for col in self.Z_train.T]
 
