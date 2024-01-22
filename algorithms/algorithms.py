@@ -255,7 +255,7 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
             f_loss = 0
             # Prediction loss
             p_loss = loss_func(Yhat.reshape(-1), y_batch)
-            cost = (1-lambda_)*p_loss
+            cost = (1-lambda_) * p_loss
 
             # EI_Constraint (Equal Improvability)
             if fairness == 'EI' and torch.sum(Yhat<tau)>0:
@@ -266,7 +266,9 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
 
+                loss_mean = loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max), device=device))
                 for sensitive_attr_idx, sensitive_attr in enumerate(sensitive_attrs):
+                    f_loss = 0
                     loss_z = torch.zeros(len(sensitive_attr), device=device)
                     for z in sensitive_attr:
                         group_idx = z_batch_e[:, sensitive_attr_idx] == z
@@ -276,8 +278,7 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                             continue
 
                         loss_z[z] = loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(num_group_samples, device=device))
-                    loss_mean = torch.mean(loss_z)
-                    f_loss = torch.sum(torch.abs(loss_z[z] - loss_mean))
+                        f_loss += torch.abs(loss_z[z] - loss_mean)
                     cost += lambda_ * f_loss
                     
             elif fairness == 'BE':
@@ -288,8 +289,10 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                 else:
                     Yhat_max = PGD_effort(model, dataset, x_batch_e, effort_iter, effort_lr, delta_effort, device=device)
 
+                loss_mean = (len(x_batch_e)/len(x_batch)) * loss_func(Yhat_max.reshape(-1), torch.ones(len(Yhat_max), device=device))
                 for sensitive_attr_idx, sensitive_attr in enumerate(sensitive_attrs):
-                    loss_z = torch.zeros(len(sensitive_attrs), device=device)
+                    f_loss = 0
+                    loss_z = torch.zeros(len(sensitive_attr), device=device)
                     for z in sensitive_attr:
                         group_idx = z_batch_e[:, sensitive_attr_idx] == z
                         num_group_samples = group_idx.sum()
@@ -298,8 +301,7 @@ def trainer_fb_fair(model, dataset, optimizer, device, n_epochs, batch_size, z_b
                             continue
 
                         loss_z[z] = (z_batch_e[group_idx, sensitive_attr_idx].shape[0] / z_batch[z_batch[:, sensitive_attr_idx]==z, sensitive_attr_idx].shape[0]) * loss_func(Yhat_max.reshape(-1)[group_idx], torch.ones(num_group_samples, device=device))
-                    loss_mean = torch.mean(loss_z)
-                    f_loss = torch.sum(torch.abs(loss_z[z] - loss_mean))
+                        f_loss += torch.abs(loss_z[z] - loss_mean)
                     cost += lambda_ * f_loss
             
             optimizer.zero_grad()
